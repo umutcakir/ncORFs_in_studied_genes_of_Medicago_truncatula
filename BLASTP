@@ -1,0 +1,13 @@
+source activate diamond_env
+
+db_path="/scratch-scc/users/u14411/Databases/uniprot_ref_proteome_db/db/reference_proteomes.dmnd"
+
+diamond blastp \
+  --query altprots.fasta \
+  --db $db_path \
+  --more-sensitive \
+  --max-target-seqs 0 \
+  --evalue 0.001 \
+  --out blastp_with_tax.tsv \
+  --outfmt 6 qseqid sseqid stitle length pident ppos qcovhsp evalue sscinames staxids \
+  --threads 190
