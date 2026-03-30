@@ -1,4 +1,57 @@
+# Database generation: 
 source activate diamond_env
+
+# Detect latest UniProt Reference Proteomes release
+echo "[INFO] Detecting latest UniProt release..."
+latest_file=$(wget -qO- https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/ \
+  | grep -oP 'Reference_Proteomes_\d{4}_\d{2}\.tar\.gz' \
+  | sort -V | tail -n 1)
+ 
+echo "[INFO] Latest file: $latest_file"
+
+# Download the tar.gz file
+echo "[INFO] Downloading $latest_file..."
+aria2c -x 16 -s 16 "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/$latest_file"
+
+echo "md5sum is: " 
+md5sum $latest_file
+
+# Extract the downloaded archive
+echo "[INFO] Extracting $latest_file..."
+tar xf "$latest_file"
+
+# Concatenate relevant FASTA files
+echo "[INFO] Concatenating protein FASTA files..."
+touch reference_proteomes.fasta.gz
+find . -mindepth 2 | grep "fasta.gz" | grep -v 'DNA' | grep -v 'additional' | xargs cat >> reference_proteomes.fasta.gz
+
+printf "accession\taccession.version\ttaxid\tgi\n" > reference_proteomes.taxid_map
+zcat */*/*.idmapping.gz \
+  | grep "NCBI_TaxID" \
+  | awk '{print $1 "\t" $1 "\t" $3 "\t" 0}' \
+  | sort -u \
+  >> reference_proteomes.taxid_map
+
+mkdir -p taxdump;
+cd taxdump;
+curl -L https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/accession2taxid/prot.accession2taxid.FULL.gz 
+wget "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.zip"
+unzip new_taxdump.zip
+cd ..;
+
+# Create Diamond database
+echo "[INFO] Building DIAMOND database..."
+mkdir -p db
+diamond makedb \
+  --db db/reference_proteomes.dmnd \
+  --in reference_proteomes.fasta.gz \
+  --threads 90 \
+  --taxonmap reference_proteomes.taxid_map \
+  --taxonnames taxdump/names.dmp \
+  --taxonnodes taxdump/nodes.dmp 
+
+
+# Run DIAMOND BLASTP:
 
 db_path="/scratch-scc/users/u14411/Databases/uniprot_ref_proteome_db/db/reference_proteomes.dmnd"
 
