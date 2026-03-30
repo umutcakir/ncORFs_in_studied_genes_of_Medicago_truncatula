@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+"""
+Summarise BLASTP / BLASTN results for each AltORF.
+
+Adds:
+  • BLASTP hits — number of BLASTP rows (0 if none)
+  • BLASTN hits — number of BLASTN rows (0 if none)
+  • BLASTP species / BLASTN species — unique, sorted list of ALL species seen
+  • Top-hit metrics (length, e-value, …) are kept for reference
+"""
+
+import pandas as pd
+from pathlib import Path
+
+# ── File paths ───────────────────────────────────────────────────────────────
+EXCEL_PATH  = Path("136 AltProts with aa and nt.xlsx")
+BLASTP_TSV  = Path("blastp_with_tax.tsv")
+BLASTN_TSV  = Path("blastn_with_tax.tsv")
+OUTPUT_FILE = Path("altProts_with_blast_summary.xlsx")
+
+# ── Column layouts exactly matching the TSV files ────────────────────────────
+BLASTP_COLS = [
+    "qseqid", "sseqid", "stitle", "length", "pident", "ppos",
+    "qcovhsp", "evalue", "sscinames", "staxids"
+]
+
+BLASTN_COLS = [
+    "qseqid", "sseqid", "stitle", "length", "pident", "ppos",
+    "qcovhsp", "evalue",
+    "staxids",          # staxids precedes sscinames in this file
+    "sscinames",
+    "scomnames", "sblastnames", "sskingdoms", "salltitles"
+]
+
+READ_KW = dict(sep="\t", header=None, dtype=str, keep_default_na=False)
+
+# ── 1. Load datasets ─────────────────────────────────────────────────────────
+altprot_df = pd.read_excel(EXCEL_PATH)
+blastp_df  = pd.read_csv(BLASTP_TSV, names=BLASTP_COLS, **READ_KW)
+blastn_df  = pd.read_csv(BLASTN_TSV, names=BLASTN_COLS, **READ_KW)
+
+# ── 2. Top-hit rows (first occurrence) ───────────────────────────────────────
+blastp_top = blastp_df.drop_duplicates("qseqid")
+blastn_top = blastn_df.drop_duplicates("qseqid")
+
+# ── 3. ALL-species lists & hit counts ────────────────────────────────────────
+def species_list(df: pd.DataFrame) -> pd.Series:
+    """Series(qseqid → 'Species1; Species2; …') from *all* rows."""
+    return (
+        df.set_index("qseqid")["sscinames"]
+          .groupby(level=0)
+          .apply(lambda col: "; ".join(
+              sorted({sp.strip()
+                      for cell in col
+                      for sp in cell.split(";")
+                      if sp.strip()})
+          ))
+    )
+
+blastp_species = species_list(blastp_df).rename("BLASTP species")
+blastn_species = species_list(blastn_df).rename("BLASTN species")
+
+blastp_hits = blastp_df.groupby("qseqid").size().rename("BLASTP hits")
+blastn_hits = blastn_df.groupby("qseqid").size().rename("BLASTN hits")
+
+# ── 4. Prepare top-hit tables for merge ──────────────────────────────────────
+def rename_for_merge(df: pd.DataFrame, prefix: str) -> pd.DataFrame:
+    return df.rename(columns=lambda c: "AltORF ID" if c == "qseqid" else f"{prefix}_{c}")
+
+blastp_top = rename_for_merge(blastp_top, "blastp")
+blastn_top = rename_for_merge(blastn_top, "blastn")
+
+# ── 5. Merge everything ──────────────────────────────────────────────────────
+summary_df = (
+    altprot_df
+      .merge(blastp_top, on="AltORF ID", how="left")
+      .merge(blastn_top, on="AltORF ID", how="left")
+      .merge(blastp_species.reset_index().rename(columns={"qseqid": "AltORF ID"}),
+             on="AltORF ID", how="left")
+      .merge(blastn_species.reset_index().rename(columns={"qseqid": "AltORF ID"}),
+             on="AltORF ID", how="left")
+      .merge(blastp_hits.reset_index().rename(columns={"qseqid": "AltORF ID"}),
+             on="AltORF ID", how="left")
+      .merge(blastn_hits.reset_index().rename(columns={"qseqid": "AltORF ID"}),
+             on="AltORF ID", how="left")
+)
+
+# ── 6. Replace missing hit counts with 0 and ensure integer dtype ────────────
+summary_df["BLASTP hits"] = summary_df["BLASTP hits"].fillna(0).astype(int)
+summary_df["BLASTN hits"] = summary_df["BLASTN hits"].fillna(0).astype(int)
+
+# ── 7. Save ──────────────────────────────────────────────────────────────────
+summary_df.to_excel(OUTPUT_FILE, index=False)
+print(f"[✓] Summary written to {OUTPUT_FILE.resolve()}")
