@@ -1,0 +1,66 @@
+# This excel file look like this: 
+
+# AltORF ID	AltProt sequence	AltORF sequence	MS validated Peptide
+# MtrunA17_Chr1g0160461_1F_1945-2175_231	LRSVYGSSTQDHCMWEFCCFICHGYKIPYWSSSYGSSFYRRWPPWDPPTCSYCSGCTSTRDCSICVCKRVQCSSSHS	CTTAGGTCTGTTTATGGCTCTTCAACCCAAGATCATTGCATGTGGGAATTCTGTTGCTTCATTTGCCATGGCTATAAGATTCCTTACTGGTCCAGCAGTTATGGCAGCAGCTTCTATCGCCGTTGGCCTCCGTGGGACCCTCCTACATGTAGCTATTGTTCAGGCTGCACTTCCACAAGGGATTGTTCCATTTGTGTTTGCAAAAGAGTACAATGTTCATCCAGCCATTCT	
+# MtrunA17_Chr1g0166851_1F_1198-1323_126	SLRAGSYSLVGYRFIPPMANCTCWSHSDLYVWGLVNSKVIEK	TCATTACGTGCGGGGTCTTACTCTCTGGTTGGTTATAGGTTTATCCCTCCGATGGCTAACTGCACATGCTGGTCACACAGTGATCTTTACGTGTGGGGTCTTGTTAATTCAAAGGTGATTGAAAAA	
+
+import pandas as pd
+
+# Input Excel file path
+excel_path = "136 AltProts with aa and nt.xlsx"
+
+# Output FASTA files
+aa_fasta_path = "altprots.fasta"
+nt_fasta_path = "altorfs.fasta"
+
+# Load Excel
+df = pd.read_excel(excel_path)
+
+# Check required columns
+required_cols = ["AltORF ID", "AltProt sequence", "AltORF sequence"]
+if not all(col in df.columns for col in required_cols):
+    raise ValueError("Excel file must contain: 'AltORF ID', 'AltProt sequence', 'AltORF sequence'")
+
+# Write amino acid FASTA
+with open(aa_fasta_path, "w") as aa_out:
+    for idx, row in df.iterrows():
+        altorf_id = row["AltORF ID"]
+        aa_seq = row["AltProt sequence"]
+        if pd.notna(aa_seq):
+            aa_out.write(f">{altorf_id}\n{aa_seq}\n")
+
+# Write nucleotide FASTA
+with open(nt_fasta_path, "w") as nt_out:
+    for idx, row in df.iterrows():
+        altorf_id = row["AltORF ID"]
+        nt_seq = row["AltORF sequence"]
+        if pd.notna(nt_seq):
+            nt_out.write(f">{altorf_id}\n{nt_seq}\n")
+
+print(f"[?] Amino acid sequences written to: {aa_fasta_path}")
+print(f"[?] Nucleotide sequences written to: {nt_fasta_path}")
+
+# For MS peptides:
+# Load the Excel file
+df = pd.read_excel("136 AltProts with aa and nt.xlsx")
+ 
+# Output path for MS-validated sequences
+ms_fasta_path = "ms_validated_sequences.fasta"
+
+# Check if required columns exist
+if "AltORF ID" not in df.columns or "MS validated Peptide" not in df.columns:
+    raise ValueError("Excel file must contain: 'AltORF ID' and 'MS validated Peptide' columns.")
+
+# Write MS validated sequences
+with open(ms_fasta_path, "w") as ms_out:
+    for idx, row in df.iterrows():
+        altorf_id = row["AltORF ID"]
+        ms_validated_peptides = row["MS validated Peptide"]
+
+        if pd.notna(ms_validated_peptides):
+            peptides = [pep.strip() for pep in str(ms_validated_peptides).split(";") if pep.strip()]
+            for i, peptide in enumerate(peptides):
+                header = f">{altorf_id}" if len(peptides) == 1 else f">{altorf_id}_MS{i+1}"
+                ms_out.write(f"{header}\n{peptide}\n")
+
+print(f"MS validated sequences written to: {ms_fasta_path}")
