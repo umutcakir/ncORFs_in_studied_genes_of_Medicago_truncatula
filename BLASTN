@@ -1,5 +1,21 @@
 source activate blast_env
 
+# Database Generation: 
+mkdir "blastdb_core_nt"
+cd "blastdb_core_nt"
+
+# Activate BLAST+ environment
+source activate blast_env
+
+# Download and decompress core nucleotide database
+update_blastdb.pl --decompress core_nt
+
+# Taxonomy database download
+update_blastdb.pl taxdb --decompress
+
+
+# Run BLASTN: 
+
 fasta_file="altorfs.fasta"
 db="core_nt"
 output="blastn_with_tax.tsv"
