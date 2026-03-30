@@ -1,0 +1,15 @@
+source activate blast_env
+
+fasta_file="altorfs.fasta"
+db="core_nt"
+output="blastn_with_tax.tsv"
+
+blastn \
+  -query $fasta_file \
+  -db $db \
+  -out $output \
+  -num_threads 190 \
+  -evalue 0.001 \
+  -max_target_seqs 1000000 \
+  -outfmt "6 qseqid sseqid stitle length pident ppos qcovhsp evalue staxids sscinames scomnames sblastnames sskingdoms salltitles"
+
